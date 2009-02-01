@@ -32,6 +32,9 @@ card_stream:
   login: X
   password: Y
   
+chronopay:
+    login: qwertyuiop123456
+  
 cyber_source:
   login: X
   password: Y
