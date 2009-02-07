@@ -16,6 +16,8 @@ module ActiveMerchant #:nodoc:
       # The name of the gateway
       self.display_name = 'Chronopay'
       
+      self.default_currency = 'EUR'
+
       APPROVED = 'Y'
 
       OPCODES = {
@@ -37,12 +39,12 @@ module ActiveMerchant #:nodoc:
       
       def authorize(money, creditcard, options = {})
         post = {}
-        add_invoice(post, options)
+        add_amount(post, money, options)
         add_creditcard(post, creditcard)        
         add_address(post, creditcard, options)        
         add_customer_data(post, options)
         
-        commit('authonly', money, post)
+        commit(:initiate_pre_auth, money, post)
       end
       
       def purchase(money, creditcard, options = {})
@@ -57,11 +59,31 @@ module ActiveMerchant #:nodoc:
         commit(:purchase, money, post)
       end                       
     
+      # complete an authorization
       def capture(money, authorization, options = {})
-        commit('capture', money, post)
+        post = {}
+        add_authorization(post, authorization)
+        commit(:confirm_pre_auth, money, post)
+      end
+      
+      def recurring(money, authorization, options = {})
+        post ={}
+        add_authorization(post, authorization)
+        add_amount(post, money, options)
+        commit(:initiate_recurring, money, post)
+      end
+      
+      def void(authorization, options = {})
+        post ={}
+        add_authorization(post, authorization)
+        commit(:void_pre_auth, nil, post)
       end
     
       private                       
+      
+      def add_authorization(post, authorization)
+        add_pair(post, :transaction, authorization)
+      end
       
       def add_amount(post, money, options)
         add_pair(post, :amount, amount(money), :required => true)
@@ -122,7 +144,7 @@ module ActiveMerchant #:nodoc:
         response.shift
         unless response.blank?
           values = response[0].split("|")
-          puts values.inspect
+          puts values.inspect if test?
           result[:status] = values[0]
           if result[:status] == APPROVED
             result[:id1] = values[1] if values[1]
@@ -130,13 +152,13 @@ module ActiveMerchant #:nodoc:
           else
             result[:error] = values[1] if values[1]
           end
-          puts result.inspect
+          puts result.inspect if test?
         end
         result
       end
       
       def commit(action, money, parameters)
-        response = parse( ssl_post(TEST_URL, post_data(action, parameters)) )
+	      response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, post_data(action, parameters)))
           
         Response.new(response[:status] == APPROVED, message_from(response), response,
           :test => test?,
@@ -159,6 +181,10 @@ module ActiveMerchant #:nodoc:
           :product_id => @options[:product_id]
         )
         
+        if test?
+          puts parameters.inspect
+        end
+        
         parameters.collect { |key, value| "#{key}=#{CGI.escape(value.to_s)}" }.join("&")
       end
 
@@ -166,7 +192,7 @@ module ActiveMerchant #:nodoc:
         s = ""
 
         case action
-        when :purchase
+        when :purchase, :initiate_pre_auth
           s << @options[:shared_secret]
           s << OPCODES[action]
           s << @options[:product_id]
@@ -175,6 +201,17 @@ module ActiveMerchant #:nodoc:
           s << parameters[:street]
           s << parameters[:ip]
           s << parameters[:card_no]
+          s << parameters[:amount]
+        when :confirm_pre_auth, :void_pre_auth
+          s << @options[:shared_secret]
+          s << OPCODES[action]
+          s << @options[:product_id]
+          s << parameters[:transaction]
+        when :initiate_recurring
+          s << @options[:shared_secret]
+          s << OPCODES[:initiate_recurring]
+          s << @options[:product_id]
+          s << parameters[:transaction]
           s << parameters[:amount]
         end
 
