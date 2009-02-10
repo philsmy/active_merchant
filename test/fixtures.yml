@@ -35,7 +35,7 @@ card_stream:
 chronopay:
     login: qwertyuiop123456
     shared_secret: qwertyuiop123456
-    product_id: 004704-0001-0001
+    product_id: 0xxxx4-xxx1-xxx1
   
 cyber_source:
   login: X

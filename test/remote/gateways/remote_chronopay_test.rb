@@ -62,8 +62,8 @@ class RemoteChronopayTest < Test::Unit::TestCase
     assert response = @gateway.purchase(@amount, @credit_card, @options)
     assert_success response
     assert_equal 'Success', response.message
-    assert auth.authorization
-    assert recur = @gateway.recurring(@amount, auth.authorization)
+    assert response.authorization
+    assert recur = @gateway.recurring(@amount, response.authorization)
     assert_success recur
     assert_equal 'Success', recur.message
   end
@@ -71,7 +71,7 @@ class RemoteChronopayTest < Test::Unit::TestCase
   def test_failed_recur
     assert response = @gateway.recurring(@amount, "12343234")
     assert_failure response
-    assert_equal 'Declined by processing', response.message
+    assert_equal 'Incorrect input information', response.message
   end
 
   def test_authorize_and_capture
@@ -87,7 +87,7 @@ class RemoteChronopayTest < Test::Unit::TestCase
   def test_failed_capture
     assert response = @gateway.capture(@amount, "12343234")
     assert_failure response
-    assert_equal 'Declined by processing', response.message
+    assert_equal 'Unable to confirm preauthorisation', response.message.chomp
   end
 
   def test_authorize_and_capture
