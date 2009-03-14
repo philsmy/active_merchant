@@ -106,7 +106,7 @@ module ActiveMerchant #:nodoc:
         return if address.blank?
 
         add_pair(post, :street, address[:address1].gsub(" ", ""))
-        add_pair(post, :city, address[:city].gsub(" ", ""))
+        add_pair(post, :city, address[:city])
         add_pair(post, :country, address[:country])
       end
 
