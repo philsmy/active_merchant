@@ -69,8 +69,8 @@ instapay:
   password:
 
 iridium:
-    login: CostaF-8087494
-    password: EBW9M48INW
+    login: LOGIN
+    password: PASSWORD
 
 linkpoint:
   login: STOREID
