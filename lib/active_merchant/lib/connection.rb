@@ -19,7 +19,7 @@ module ActiveMerchant
     end
 
     def to_s
-      "Failed with #{response.code} #{response.message if response.respond_to?(:message)}"
+      "Failed with #{response.code} #{response.message if response.respond_to?(:message)} #{response.body if response.respond_to?(:message)}"
     end
   end
   
