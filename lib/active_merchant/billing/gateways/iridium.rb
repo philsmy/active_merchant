@@ -95,6 +95,9 @@ module ActiveMerchant #:nodoc:
         xml.tag! 'TransactionDetails', {'Amount' => money, 'CurrencyCode' => '978'} do
           xml.tag! 'MessageDetails', {'TransactionType' => options[:transaction_type]}
           xml.tag! 'OrderID', options[:order_id]
+          xml.tag! 'TransactionControl' do
+            xml.tag! 'ThreeDSecureOverridePolicy', 'False'
+          end
           # xml.tag! 'currency', options[:currency] || currency(money)
           # xml.tag!('grandTotalAmount', amount(money))  if include_grand_total 
         end
