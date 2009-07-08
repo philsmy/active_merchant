@@ -110,7 +110,9 @@ module ActiveMerchant #:nodoc:
         end
       end
 
-      def add_customerdetails(xml, creditcard, address, options, shipTo = false)   
+      def add_customerdetails(xml, creditcard, address, options, shipTo = false)
+        
+        country_code = CountryCodes.find_by_a2[address[:country]][:numeric] rescue 724 # rescue'd to Spain
         xml.tag! 'CustomerDetails' do
           xml.tag! 'BillingAddress' do
             xml.tag! 'Address1', address[:address1]
@@ -120,7 +122,7 @@ module ActiveMerchant #:nodoc:
             xml.tag! 'City', address[:city]
             xml.tag! 'State', address[:state]
             xml.tag! 'PostCode', address[:zip]
-            xml.tag! 'CountryCode', address[:country]
+            xml.tag! 'CountryCode', country_code
           end
           
           # xml.tag! 'EmailAddress', options[:email]
@@ -170,11 +172,12 @@ module ActiveMerchant #:nodoc:
         requires!(options, :soap_action)
         
         xml_str = build_request(request, options)
-        # puts xml_str
+        RAILS_DEFAULT_LOGGER.debug "Sending: #{xml_str}"
 	      response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, build_request(request, options),
 	                            {"SOAPAction" => options[:soap_action],
 	                              "Content-Type" => "text/xml; charset=utf-8" }))
-        # puts "Got response: #{response.inspect rescue ''}"
+  
+        RAILS_DEFAULT_LOGGER.debug "Response: #{response.inspect rescue ''}"
         
 	      success = response[:transaction_result][:status_code] == "0"
 	      message = response[:transaction_result][:message]
