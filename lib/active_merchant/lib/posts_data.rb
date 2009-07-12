@@ -23,7 +23,9 @@ module ActiveMerchant #:nodoc:
     end
     
     def ssl_post(endpoint, data, headers = {})
-      ssl_request(:post, endpoint, data, headers)
+      resp = ssl_request(:post, endpoint, data, headers)
+      
+      resp
     end
     
     private

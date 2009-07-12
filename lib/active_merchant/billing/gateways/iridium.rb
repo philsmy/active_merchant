@@ -23,6 +23,10 @@ module ActiveMerchant #:nodoc:
         super
       end  
       
+      def three_d_secure_enabled?
+        @options[:enable_3d_secure]
+      end
+
       def authorize(money, creditcard, options = {})
         post = {}
         
@@ -80,6 +84,16 @@ module ActiveMerchant #:nodoc:
         commit(build_purchase_request(money, creditcard, options), options)
       end
     
+      # Completes a 3D Secure transaction
+      def three_d_complete(pa_res, md, options = {})
+        options = options.merge(:xml_transaction_wrapper => 'ThreeDSecureAuthentication')
+        options = options.merge(:soap_action => "https://www.thepaymentgateway.net/ThreeDSecureAuthentication")
+        options = options.merge(:md => md)
+        options = options.merge(:pa_res => pa_res)
+
+        commit(build_three_d_secure_complete_request(options), options)
+      end
+
       private                       
 
       def setup_address_hash(options)
@@ -96,7 +110,7 @@ module ActiveMerchant #:nodoc:
           xml.tag! 'MessageDetails', {'TransactionType' => options[:transaction_type]}
           xml.tag! 'OrderID', options[:order_id]
           xml.tag! 'TransactionControl' do
-            xml.tag! 'ThreeDSecureOverridePolicy', 'False'
+            xml.tag! 'ThreeDSecureOverridePolicy', 'False' unless three_d_secure_enabled? && options[:skip_3d_secure] != true
           end
           # xml.tag! 'currency', options[:currency] || currency(money)
           # xml.tag!('grandTotalAmount', amount(money))  if include_grand_total 
@@ -146,6 +160,15 @@ module ActiveMerchant #:nodoc:
         end
       end
       
+      def add_three_d_secure_complete(xml, options = {})      
+        xml.tag! 'ThreeDSecureMessage' do
+          add_merchant_data(xml, {})
+          xml.tag! 'ThreeDSecureInputData', {'CrossReference' => options[:md]} do
+            xml.tag! 'PaRES', options[:pa_res]
+          end
+        end
+      end
+
       def add_merchant_data(xml, options)
         xml.tag! 'MerchantAuthentication', {"MerchantID" => @options[:login], "Password" => @options[:password]}
       end
@@ -160,8 +183,12 @@ module ActiveMerchant #:nodoc:
                                       'xmlns:xsd' => 'http://www.w3.org/2001/XMLSchema'} do
             xml.tag! 'soap:Body' do
               xml.tag! options[:xml_transaction_wrapper], {'xmlns' => "https://www.thepaymentgateway.net/"} do
-                xml.tag! 'PaymentMessage' do
-                  add_merchant_data(xml, options)
+                unless options[:xml_transaction_wrapper] == "ThreeDSecureAuthentication"
+                  xml.tag! 'PaymentMessage' do
+                    add_merchant_data(xml, options)
+                    xml << body
+                  end
+                else
                   xml << body
                 end
               end
@@ -174,23 +201,25 @@ module ActiveMerchant #:nodoc:
       def commit(request, options)
         requires!(options, :soap_action)
         
-        xml_str = build_request(request, options)
-        RAILS_DEFAULT_LOGGER.debug "Sending: #{xml_str}"
 	      response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, build_request(request, options),
 	                            {"SOAPAction" => options[:soap_action],
 	                              "Content-Type" => "text/xml; charset=utf-8" }))
   
-        RAILS_DEFAULT_LOGGER.debug "Response: #{response.inspect rescue ''}"
+        # puts response.inspect if test?
         
 	      success = response[:transaction_result][:status_code] == "0"
 	      message = response[:transaction_result][:message]
         authorization = success ? [ options[:order_id], response[:transaction_output_data][:cross_reference], response[:transaction_output_data][:auth_code] ].compact.join(";") : nil
         
-        Response.new(success, message, response, 
+        IridiumResponse.new(success, message, response, 
           :test => test?, 
           :authorization => authorization,
           :avs_result => { :code => response[:avsCode] },
-          :cvv_result => response[:cvCode]
+          :cvv_result => response[:cvCode],
+          :three_d_secure => response[:transaction_result][:status_code] == "3",
+          :pa_req => (response[:transaction_output_data][:three_d_secure_output_data][:pa_req] rescue ""),
+          :md => (response[:transaction_output_data][:cross_reference] rescue ""),
+          :acs_url => (response[:transaction_output_data][:three_d_secure_output_data][:acsurl] rescue "")
         )
       end
 
@@ -217,6 +246,12 @@ module ActiveMerchant #:nodoc:
         xml.target!
       end
       
+      def build_three_d_secure_complete_request(options)
+        xml = Builder::XmlMarkup.new :indent => 2
+        add_three_d_secure_complete(xml, options)
+        xml.target!
+      end
+      
       # Parse the SOAP response
       # Technique inspired by the Paypal Gateway
       def parse(xml)
@@ -224,7 +259,8 @@ module ActiveMerchant #:nodoc:
         reply = {}
         xml = REXML::Document.new(xml)
         if (root = REXML::XPath.first(xml, "//CardDetailsTransactionResponse")) or
-              (root = REXML::XPath.first(xml, "//CrossReferenceTransactionResponse"))
+              (root = REXML::XPath.first(xml, "//CrossReferenceTransactionResponse")) or
+                (root = REXML::XPath.first(xml, "//ThreeDSecureAuthenticationResponse"))
           root.elements.to_a.each do |node|
             case node.name  
             when 'Message'
@@ -250,6 +286,13 @@ module ActiveMerchant #:nodoc:
           node.elements.each{|e| parse_element(reply[:transaction_result], e) } if node.has_elements?
 
         when "CardDetailsTransactionResult"
+          reply[:transaction_result] = {}
+          node.attributes.each do |a,b|
+            reply[:transaction_result][a.underscore.to_sym] = b
+          end
+          node.elements.each{|e| parse_element(reply[:transaction_result], e) } if node.has_elements?
+
+        when "ThreeDSecureAuthenticationResult"
           reply[:transaction_result] = {}
           node.attributes.each do |a,b|
             reply[:transaction_result][a.underscore.to_sym] = b
@@ -289,3 +332,22 @@ module ActiveMerchant #:nodoc:
   end
 end
 
+module ActiveMerchant #:nodoc:
+  module Billing #:nodoc:
+    class IridiumResponse < Response
+      attr_reader :pa_req, :md, :acs_url
+
+      def three_d_secure?
+        @three_d_secure
+      end
+
+      def initialize(success, message, params = {}, options = {})
+        super
+        @three_d_secure = options[:three_d_secure]
+        @pa_req = options[:pa_req]
+        @md = options[:md]
+        @acs_url = options[:acs_url]
+      end
+    end
+  end
+end

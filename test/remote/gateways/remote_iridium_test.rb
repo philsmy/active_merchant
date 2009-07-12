@@ -17,7 +17,7 @@ class RemoteIridiumTest < Test::Unit::TestCase
                           :zip => "TR14 8PA",
                           :country => "826")
     @options = { 
-      :order_id => rand(100).to_s,
+      :order_id => generate_unique_id,
       :billing_address => our_address,
       :description => 'Store Purchase'
     }
@@ -102,13 +102,14 @@ class RemoteIridiumTest < Test::Unit::TestCase
     assert_success purchase
     assert_not_nil purchase.authorization
   end
-  
-  def test_3d_secure
-    assert purchase = @gateway.purchase(@amount, @threed_credit_card, @options)
-    assert_failure purchase
-    assert !purchase.params["transaction_output_data"][:three_d_secure_output_data][:acsurl].blank?, purchase.inspect
-    assert !purchase.params["transaction_output_data"][:three_d_secure_output_data][:pa_req].blank?, purchase.inspect
-  end
+
+  #  Covered in the ThreeDSecure test script
+  # def test_3d_secure
+  #   assert purchase = @gateway.purchase(@amount, @threed_credit_card, @options)
+  #   assert_failure purchase
+  #   assert !purchase.params["transaction_output_data"][:three_d_secure_output_data][:acsurl].blank?, purchase.inspect
+  #   assert !purchase.params["transaction_output_data"][:three_d_secure_output_data][:pa_req].blank?, purchase.inspect
+  # end
   
 
   def test_invalid_login
