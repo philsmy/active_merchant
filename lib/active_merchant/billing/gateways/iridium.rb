@@ -142,9 +142,9 @@ module ActiveMerchant #:nodoc:
             xml.tag! 'CountryCode', country_code
           end
           
-          # xml.tag! 'EmailAddress', options[:email]
+          xml.tag! 'EmailAddress', options[:email]
           # xml.tag! 'PhoneNumber', options[:telephone]
-          # xml.tag! 'CustomerIPAddress', options[:ip]
+          xml.tag! 'CustomerIPAddress', options[:ip] || "127.0.0.1"
         end   
       end
 
