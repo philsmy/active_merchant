@@ -3,8 +3,8 @@ require 'test_helper'
 class IridiumTest < Test::Unit::TestCase
   def setup
     @gateway = IridiumGateway.new(
-                 :login => 'CostaF-8087494',
-                 :password => 'EBW9M48INW'
+                 :login => 'CostaF-xxx',
+                 :password => 'EBW9Mxxx'
                )
 
     @credit_card = credit_card

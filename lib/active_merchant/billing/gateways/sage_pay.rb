@@ -1,13 +1,13 @@
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
-    class ProtxGateway < Gateway  
+    class SagePayGateway < Gateway  
       cattr_accessor :simulate
       self.simulate = false
       
-      TEST_URL = 'https://ukvpstest.protx.com/vspgateway/service'
-      LIVE_URL = 'https://ukvps.protx.com/vspgateway/service'
-      SIMULATOR_URL = 'https://ukvpstest.protx.com/VSPSimulator'
-    
+      TEST_URL = 'https://test.sagepay.com/gateway/service'
+      LIVE_URL = 'https://live.sagepay.com/gateway/service'
+      SIMULATOR_URL = 'https://test.sagepay.com/Simulator'
+      
       APPROVED = 'OK'
     
       TRANSACTIONS = {
@@ -31,6 +31,8 @@ module ActiveMerchant #:nodoc:
         :diners_club => "DC",
         :jcb => "JCB"
       }
+
+      CURRENCIES_WITHOUT_FRACTIONS = [ 'JPY' ]
       
       ELECTRON = /^(424519|42496[23]|450875|48440[6-8]|4844[1-5][1-5]|4917[3-5][0-9]|491880)\d{10}(\d{3})?$/
       
@@ -45,8 +47,8 @@ module ActiveMerchant #:nodoc:
       self.supported_countries = ['GB']
       self.default_currency = 'GBP'
       
-      self.homepage_url = 'http://www.protx.com'
-      self.display_name = 'Protx'
+      self.homepage_url = 'http://www.sagepay.com'
+      self.display_name = 'SagePay'
 
       def initialize(options = {})
         requires!(options, :login)
@@ -138,8 +140,9 @@ module ActiveMerchant #:nodoc:
       end
       
       def add_amount(post, money, options)
-        add_pair(post, :Amount, amount(money), :required => true)
-        add_pair(post, :Currency, options[:currency] || currency(money), :required => true)
+        currency = options[:currency] || currency(money)
+        add_pair(post, :Amount, localized_amount(money, currency), :required => true)
+        add_pair(post, :Currency, currency, :required => true)
       end
 
       # doesn't actually use the currency -- dodgy!
@@ -281,12 +284,14 @@ module ActiveMerchant #:nodoc:
         parameters.collect { |key, value| "#{key}=#{CGI.escape(value.to_s)}" }.join("&")
       end
       
-      # Protx returns data in the following format
+      # SagePay returns data in the following format
       # Key1=value1
       # Key2=value2
       def parse(body)
         result = {}
-        body.to_a.each { |pair| result[$1] = $2 if pair.strip =~ /\A([^=]+)=(.+)\Z/im }
+        body.to_s.each_line do |pair|
+          result[$1] = $2 if pair.strip =~ /\A([^=]+)=(.+)\Z/im
+        end
         result
       end
 
@@ -300,6 +305,11 @@ module ActiveMerchant #:nodoc:
         last_name = name.pop || ''
         first_name = name.join(' ')
         [ first_name[0,20], last_name[0,20] ]
+      end
+      
+      def localized_amount(money, currency)
+        amount = amount(money)
+        CURRENCIES_WITHOUT_FRACTIONS.include?(currency.to_s) ? amount.split('.').first : amount
       end
     end
   end
